@@ -16,7 +16,7 @@ def product(*inputs, r=1, **backend):
         with `n[i]` elements each.
     r : int, default=1
         Repeats.
-        .. warning:: keyword argument only.
+        !!! warning "keyword argument only"
 
     Returns
     -------
@@ -31,8 +31,9 @@ def product(*inputs, r=1, **backend):
 def permutations(input, r=None):
     """All possible r-length permutations of a set.
 
-    .. note:: This function loops over the number of input elements,
-              It can therefore be slow if this number is large.
+    !!! note
+        This function loops over the number of input elements,
+        It can therefore be slow if this number is large.
 
     Parameters
     ----------

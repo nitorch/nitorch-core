@@ -8,12 +8,12 @@ import torch
 from interpol import iso0, iso1, nd, utils as ts_utils
 from interpol.pushpull import make_bound, make_spline
 from interpol.bounds import Bound
-from nitorch._C.grid import bound_to_nitorch, inter_to_nitorch
+from interpol.autograd import bound_to_nitorch, inter_to_nitorch
 from interpol import grid_grad, grid_pull, grid_push, grid_count
 from .conv import smooth
 from .optionals import custom_fwd, custom_bwd
-from typing import List
 from . import py, dtypes, kernels
+from typing import List
 
 
 # ======================================================================

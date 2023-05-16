@@ -1,10 +1,11 @@
 import math as pymath
 import torch
 from torch.nn import functional as F
-from nitorch_core import py, math, kernels
-from nitorch_core.py import make_list
+from nitorch_core import kernels
+from nitorch_core.py import make_list, ensure_list
 from nitorch_core.padding import pad
-from nitorch_core.tensors import to_max_backend, make_vector, movedim, ind2sub
+from nitorch_core.extra import to_max_backend, make_vector, movedim, ind2sub
+from nitorch_fastmath import reduce
 
 
 def _same_padding(in_size, kernel_size, stride, ceil):
@@ -50,9 +51,9 @@ def compute_conv_shape(input_size, kernel_size, padding=0, dilation=1,
     trunc_fn = pymath.ceil if ceil else pymath.floor
 
     dim = len(input_size)
-    kernel_size = py.ensure_list(kernel_size, dim)
-    dilation = py.ensure_list(dilation, dim)
-    stride = py.ensure_list(stride, dim)
+    kernel_size = ensure_list(kernel_size, dim)
+    dilation = ensure_list(dilation, dim)
+    stride = ensure_list(stride, dim)
 
     padding = compute_conv_padding(input_size, padding, kernel_size,
                                    dilation, stride, ceil)
@@ -95,16 +96,16 @@ def compute_conv_padding(input_size, kernel_size, padding, dilation=1,
     # https://stackoverflow.com/questions/37674306/ (Answer by Vaibhav Dixit)
 
     dim = len(input_size)
-    kernel_size = py.ensure_list(kernel_size, dim)
-    dilation = py.ensure_list(dilation, dim)
-    stride = py.ensure_list(stride, dim)
+    kernel_size = ensure_list(kernel_size, dim)
+    dilation = ensure_list(dilation, dim)
+    stride = ensure_list(stride, dim)
     kernel_size = [(k-1) * d + 1 for (k, d) in zip(kernel_size, dilation)]
-    padding = py.ensure_list(padding, dim)
+    padding = ensure_list(padding, dim)
 
     padding = [0 if p == 'valid'
                else _same_padding(i, k, s, ceil) if p in ('same', 'auto')
                else p if isinstance(p, int)
-               else tuple(py.ensure_list(p))
+               else tuple(ensure_list(p))
                for p, i, k, s in zip(padding, input_size, kernel_size, stride)]
     if not all(isinstance(p, int) or
                (isinstance(p, tuple) and len(p) == 2
@@ -392,17 +393,17 @@ def pool(dim, tensor, kernel_size=3, stride=None, dilation=1, padding=0,
             return_indices0 = return_indices
             return_indices = False
         if reduction == 'mean':
-            reduction = lambda x: math.mean(x, dim=-1)
+            reduction = lambda x: reduce.mean(x, dim=-1)
         elif reduction == 'sum':
-            reduction = lambda x: math.sum(x, dim=-1)
+            reduction = lambda x: reduce.sum(x, dim=-1)
         elif reduction == 'min':
-            reduction = lambda x: math.min(x, dim=-1)
+            reduction = lambda x: reduce.min(x, dim=-1)
         elif reduction == 'max':
-            reduction = lambda x: math.max(x, dim=-1)
+            reduction = lambda x: reduce.max(x, dim=-1)
         elif reduction == 'median':
-            reduction = lambda x: math.median(x, dim=-1)
+            reduction = lambda x: reduce.median(x, dim=-1)
         if reduction == 'ssq':
-            reduction = lambda x: math.mean(x.square(), dim=-1).sqrt()
+            reduction = lambda x: reduce.mean(x.square(), dim=-1).sqrt()
         elif not callable(reduction):
             raise ValueError(f'Unknown reduction {reduction}')
         pool_fn = lambda *a, **k: _pool(*a, **k, dilation=dilation, reduction=reduction)

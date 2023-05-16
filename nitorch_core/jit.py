@@ -1,7 +1,7 @@
 """A lot of utility functions for TorchScript"""
 import torch
 import os
-from typing import List, Tuple, Optional
+from typing import List, Optional
 from .version import torch_version
 from torch import Tensor
 

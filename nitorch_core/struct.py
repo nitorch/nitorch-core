@@ -154,7 +154,8 @@ class Structure:
             field = self._fields[key]
             if isinstance(field, ValidatedField):
                 if field.validator is STRONGTYPE:
-                    validator = lambda x: isinstance(x, annotations[key])
+                    def validator(x):
+                        return isinstance(x, annotations[key])
                 else:
                     validator = field.validator
                 if not validator(value):

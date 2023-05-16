@@ -3,7 +3,7 @@ import numpy as np
 import random
 import os
 import contextlib
-from nitorch_core import py
+from nitorch_core.py import make_list
 
 
 class benchmark:
@@ -68,7 +68,7 @@ def reproducible(seed=1234, enabled=True, devices=None):
     py_hash_seed = os.environ.get('PYTHONHASHSEED', None)
     cudnn = torch.backends.cudnn.deterministic
     cpu_state = torch.random.get_rng_state()
-    devices = py.make_list(devices or [])
+    devices = make_list(devices or [])
     devices = [torch.device(device) for device in devices
                if torch.device(device).type == 'cuda']
     cuda_state = [torch.cuda.get_rng_state(device) for device in devices]

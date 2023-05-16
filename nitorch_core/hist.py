@@ -1,8 +1,9 @@
+__all__ = [ 'histc', 'jhistc', 'quantile']
 import torch
-from nitorch_core import py, dtypes
-from nitorch_core.tensors import movedim, backend, to_max_backend
+from nitorch_core.py import make_list, prod
+from nitorch_core.extra import movedim, backend, to_max_backend
 from nitorch_core.constants import eps
-from interpol import grid_push, grid_pull, grid_grad, grid_count
+from nitorch_interpol import push, pull, pushcount
 
 
 def histc(x, n=64, min=None, max=None, dim=None, keepdim=False, weights=None,
@@ -46,7 +47,6 @@ def histc(x, n=64, min=None, max=None, dim=None, keepdim=False, weights=None,
 
     """
     # reshape as [batch, pool]]
-    x = torch.as_tensor(x)
     if weights is not None:
         dtype = x.dtype if x.dtype.is_floating_point else torch.get_default_dtype()
         weights = torch.as_tensor(weights, dtype=dtype, device=x.device).expand(x.shape)
@@ -56,15 +56,15 @@ def histc(x, n=64, min=None, max=None, dim=None, keepdim=False, weights=None,
         if weights is not None:
             weights = weights.reshape([1, -1])
     else:
-        dim = py.make_list(dim)
+        dim = make_list(dim)
         odim = list(range(-len(dim), 0))
         inshape = x.shape
         x = movedim(x, dim, odim)
         batch = x.shape[:-len(dim)]
         pool = x.shape[-len(dim):]
-        x = x.reshape([-1, py.prod(pool)])
+        x = x.reshape([-1, prod(pool)])
         if weights is not None:
-            weights = weights.reshape([-1, py.prod(pool)])
+            weights = weights.reshape([-1, prod(pool)])
 
     # compute limits
     if min is None:
@@ -80,23 +80,25 @@ def histc(x, n=64, min=None, max=None, dim=None, keepdim=False, weights=None,
 
     # convert intensities to coordinates
     # (min -> -0.5  // max -> n-0.5)
-    if not dtypes.dtype(x.dtype).is_floating_point:
-        ftype = torch.get_default_dtype()
-        x = x.to(ftype)
-    x = x.clone()
+    if not x.dtype.is_floating_point:
+        x = x.to(torch.get_default_dtype(), co=True)
+    else:
+        x = x.clone()
     x = x.mul_(n / (max - min)).add_(n / (1 - max / min)).sub_(0.5)
 
     # push data into the histogram
     if not extrapolate:
         # hidden feature: tell pullpush to use +/- 0.5 tolerance when
         # deciding if a coordinate is inbounds.
-        extrapolate = 2
+        extrapolate = 'edge'
     if weights is None:
         # count == push an image of ones
-        h = grid_count(x[:, :, None], [n], order, bound, extrapolate)[:, 0, ]
+        # (B, M, 1) -> (B, N)
+        h = pushcount(x[:, :, None], [n], order, bound, extrapolate)
     else:
         # push weights
-        h = grid_push(weights[:, None, :], x[:, :, None], [n], order, bound, extrapolate)[:, 0, ]
+        # (B, M, 1) & (B, M, 1) -> (B, N, 1)
+        h = push(weights[:, :, None], x[:, :, None], [n], order, bound, extrapolate)[:, :, 0]
 
     # reshape
     h = h.to(dtype)
@@ -111,7 +113,7 @@ def histc(x, n=64, min=None, max=None, dim=None, keepdim=False, weights=None,
     return h
 
 
-def histc2(x, n=64, min=None, max=None, dim=None, keepdim=False,
+def jhistc(x, n=64, min=None, max=None, dim=None, keepdim=False,
            order=1, bound='replicate', extrapolate=False, dtype=None):
     """Batched + differentiable joint histogram computation
 
@@ -149,16 +151,15 @@ def histc2(x, n=64, min=None, max=None, dim=None, keepdim=False,
         Count histogram
 
     """
-    n = py.make_list(n, 2)
+    n = make_list(n, 2)
 
     # reshape as [batch, pool, 2]]
-    x = torch.as_tensor(x)
     bck = backend(x)
     if dim is None:
         x = x.reshape([1, -1, 2])
         batch = []
     else:
-        dim = py.make_list(dim)
+        dim = make_list(dim)
         if -1 in dim or (x.dim()-1) in dim:
             raise ValueError('Cannot pool along last dimension')
         odim = list(range(-len(dim)-1, -1))
@@ -166,7 +167,7 @@ def histc2(x, n=64, min=None, max=None, dim=None, keepdim=False,
         x = movedim(x, dim, odim)
         batch = x.shape[:-len(dim)-1]
         pool = x.shape[-len(dim)-1:-1]
-        x = x.reshape([-1, py.prod(pool), 2])
+        x = x.reshape([-1, prod(pool), 2])
 
     # compute limits
     if min is None:
@@ -182,10 +183,10 @@ def histc2(x, n=64, min=None, max=None, dim=None, keepdim=False,
 
     # convert intensities to coordinates
     # (min -> -0.5  // max -> n-0.5)
-    if not dtypes.dtype(x.dtype).is_floating_point:
-        ftype = torch.get_default_dtype()
-        x = x.to(ftype)
-    x = x.clone()
+    if not x.dtype.is_floating_point:
+        x = x.to(torch.get_default_dtype(), co=True)
+    else:
+        x = x.clone()
     nn = torch.as_tensor(n, dtype=x.dtype, device=x.device)
     x = x.mul_(nn / (max - min)).add_(nn / (1 - max / min)).sub_(0.5)
 
@@ -193,8 +194,9 @@ def histc2(x, n=64, min=None, max=None, dim=None, keepdim=False,
     if not extrapolate:
         # hidden feature: tell pullpush to use +/- 0.5 tolerance when
         # deciding if a coordinate is inbounds.
-        extrapolate = 2
-    h = grid_count(x[:, None], n, order, bound, extrapolate)[:, 0]
+        extrapolate = 'edge'
+    # (B, 1, M, 2) -> (B, N, N)
+    h = pushcount(x[:, None, :, :], n, order, bound, extrapolate)
 
     # reshape
     h = h.to(dtype)
@@ -271,20 +273,8 @@ def quantile(input, q, dim=None, keepdim=False, bins=None, mask=None, *, out=Non
         Quantiles
 
     """
-    def torch_is_recent():
-        version = torch.__version__.split('.')
-        version = (int(version[0]), int(version[1]))
-        return version[0] > 2 or (version[0] == 1 and version[1] >= 7)
-
     input, q = to_max_backend(input, q)
-    dim = py.make_list([] if dim is None else dim)
-    # if torch_is_recent() and len(dim) < 2 and not bins:
-    #     dim = dim[0] if dim else None
-    #     return torch.quantile(input, q, dim=dim, keepdim=keepdim, out=out)
-
-    # ------------------
-    # our implementation
-    # ------------------
+    dim = make_list([] if dim is None else dim)
 
     # reshape as (batch, pool)
     inshape = input.shape
@@ -300,9 +290,9 @@ def quantile(input, q, dim=None, keepdim=False, bins=None, mask=None, *, out=Non
         input = movedim(input, dim, odim)
         batch = input.shape[:-len(dim)]
         pool = input.shape[-len(dim):]
-        input = input.reshape([-1, py.prod(pool)])
+        input = input.reshape([-1, prod(pool)])
         if mask is not None:
-            mask = movedim(mask, dim, odim).reshape([-1, py.prod(pool)])
+            mask = movedim(mask, dim, odim).reshape([-1, prod(pool)])
 
     q_scalar = q.dim() == 0
     q = q.reshape([-1]).clone()
@@ -310,14 +300,16 @@ def quantile(input, q, dim=None, keepdim=False, bins=None, mask=None, *, out=Non
         # sort and sample
         input, _ = input.sort(-1)
         q = q.mul_(input.shape[-1]-1)
-        q = grid_pull(input[None], q[None, :, None], 1, 'replicate', 0)[0]
+        # (B, M, 1) (N, 1) -> (B, N, 1)
+        q = pull(input[:, :, None], q[:, None], 1, 'replicate', False)[:, :, 0]
     elif not bins:
         input, index = input.sort(-1)
         mask = mask.gather(-1, index)
         mask = mask.cumsum(-1) / mask.sum(-1, keepdim=True)
         mask[:, -1] = 1
         q = _hist_to_quantile(mask, q)
-        q = grid_pull(input[:, None], q[:, :, None], 1, 'replicate', 0)[:, 0]
+        # (B, M, 1) (N, 1) -> (B, N, 1)
+        q = pull(input[:, :, None], q[:, None], 1, 'replicate', False)[:, :, 0]
     else:
         # compute cumulative histogram
         min = input.min(-1).values
@@ -348,5 +340,5 @@ def quantile(input, q, dim=None, keepdim=False, bins=None, mask=None, *, out=Non
         q = q.squeeze(-1)
 
     if out:
-        out.reshape(q.shape).copy_(q)
+        out.reshape(q.shape).co_(q)
     return q

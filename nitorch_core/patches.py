@@ -1,10 +1,11 @@
+__all__ = ['unfold', 'fold', 'apply_patchwise']
 import torch
 import math as pymath
 import itertools
-
-from nitorch_core import py, dtypes
+from nitorch_core import dtypes
+from nitorch_core.py import make_list
 from nitorch_core.padding import pad, ensure_shape
-from nitorch_core.tensors import movedim
+from nitorch_core.extra import movedim
 
 
 def unfold(inp, kernel_size, stride=None, collapse=False):
@@ -33,10 +34,10 @@ def unfold(inp, kernel_size, stride=None, collapse=False):
 
     """
     inp = torch.as_tensor(inp)
-    kernel_size = py.make_list(kernel_size)
+    kernel_size = make_list(kernel_size)
     dim = len(kernel_size)
     batch_dim = inp.dim() - dim
-    stride = py.make_list(stride, dim)
+    stride = make_list(stride, dim)
     stride = [st or sz for st, sz in zip(stride, kernel_size)]
     for d, (sz, st) in enumerate(zip(kernel_size, stride)):
         inp = inp.unfold(dimension=batch_dim+d, size=sz, step=st)
@@ -101,7 +102,7 @@ def fold(inp, dim=None, stride=None, shape=None, collapsed=False,
     if not dim:
         raise ValueError('Cannot guess dim from inputs')
     kernel_size = inp.shape[-dim:]
-    stride = py.make_list(stride, len(kernel_size))
+    stride = make_list(stride, len(kernel_size))
     stride = [st or sz for st, sz in zip(stride, kernel_size)]
     if any(sz > 2*st for st, sz in zip(stride, kernel_size)):
         # I only support overlapping of two patches (along a given dim).
@@ -232,8 +233,8 @@ def apply_patchwise(fn, img, patch=256, overlap=None, batchout=None,
 
     """
     dim = dim or (len(patch) if hasattr(patch, '__len__') else img.dim())
-    patch = py.make_list(patch, dim)
-    overlap = py.make_list(overlap, dim)
+    patch = make_list(patch, dim)
+    overlap = make_list(overlap, dim)
     overlap = [p//2 if o is None else o for o, p in zip(overlap, patch)]
     opatch = [p-o for o, p in zip(overlap, patch)]
 

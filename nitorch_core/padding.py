@@ -1,37 +1,8 @@
 import torch
-from nitorch_core import bounds, py, jit
-from nitorch_core.tensors import meshgrid_ij
-
-
-def _bound_circular(i, n):
-    return i % n
-
-
-def _bound_replicate(i, n):
-    return i.clamp(min=0, max=n-1)
-
-
-def _bound_reflect2(i, n):
-    n2 = n*2
-    pre = (i < 0)
-    i[pre] = n2 - 1 - ((-i[pre]-1) % n2)
-    i[~pre] = (i[~pre] % n2)
-    post = (i >= n)
-    i[post] = n2 - i[post] - 1
-    return i
-
-
-def _bound_reflect1(i, n):
-    if n == 1:
-        return torch.zeros(i.size(), dtype=i.dtype, device=i.device)
-    else:
-        n2 = (n-1)*2
-        pre = (i < 0)
-        i[pre] = -i[pre]
-        i = i % n2
-        post = (i >= n)
-        i[post] = n2 - i[post]
-        return i
+from nitorch_core import bounds
+from nitorch_core.py import make_list, prod
+from nitorch_core.jit import sub2ind_list
+from nitorch_core.extra import meshgrid_ij
 
 
 def ensure_shape(inp, shape, mode='constant', value=0, side='post'):
@@ -56,8 +27,7 @@ def ensure_shape(inp, shape, mode='constant', value=0, side='post'):
         Padded tensor with shape `shape`
 
     """
-    inp = torch.as_tensor(inp)
-    shape = py.make_list(shape)
+    shape = make_list(shape)
     shape = shape + [1] * max(0, inp.dim() - len(shape))
     if inp.dim() < len(shape):
         inp = inp.reshape(inp.shape + (1,) * max(0, len(shape) - inp.dim()))
@@ -191,8 +161,8 @@ def _pad_bound(inp, padpre, padpost, bound):
     grid = list(meshgrid_ij(*grid))
     if any(map(torch.is_tensor, mult)):
         mult = meshgrid_ij(*mult)
-    mult = py.prod(mult)
-    grid = jit.sub2ind_list(grid, inp.shape)
+    mult = prod(mult)
+    grid = sub2ind_list(grid, inp.shape)
 
     out = inp.flatten()[grid]
     if torch.is_tensor(mult) or mult != 1:

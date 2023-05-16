@@ -17,7 +17,6 @@ dst2                                                        antireflect, dirichl
 dst1                                                        antimirror               -a  0 | a b c d |  0 -d
 """
 import torch
-from interpol.bounds import BoundType
 
 
 nitorch_bounds = ('replicate', 'zero', 'dct2', 'dct1', 'dst2', 'dst1', 'dft')
@@ -28,7 +27,7 @@ other_bounds = ('repeat', 'zeros', 'neumann', 'circular',
 all_bounds = (*nitorch_bounds, *scipy_bounds, *pytorch_bounds, *other_bounds)
 
 
-def to_nitorch(bound, as_enum=False):
+def to_nitorch(bound):
     """Convert boundary type to NITorch's convention.
 
     Parameters
@@ -50,24 +49,22 @@ def to_nitorch(bound, as_enum=False):
     obound = []
     for b in bound:
         b = b.lower() if isinstance(b, str) else b
-        if b in ('replicate', 'repeat', 'border', 'nearest', BoundType.replicate):
+        if b in ('replicate', 'repeat', 'border', 'nearest'):
             obound.append('replicate')
-        elif b in ('zero', 'zeros', 'constant', BoundType.zero):
+        elif b in ('zero', 'zeros', 'constant'):
             obound.append('zero')
-        elif b in ('dct2', 'reflect', 'reflection', 'neumann', BoundType.dct2):
+        elif b in ('dct2', 'reflect', 'reflection', 'neumann'):
             obound.append('dct2')
-        elif b in ('dct1', 'mirror', BoundType.dct1):
+        elif b in ('dct1', 'mirror'):
             obound.append('dct1')
-        elif b in ('dft', 'wrap', 'circular', BoundType.dft):
+        elif b in ('dft', 'wrap', 'circular'):
             obound.append('dft')
-        elif b in ('dst2', 'antireflect', 'dirichlet', BoundType.dst2):
+        elif b in ('dst2', 'antireflect', 'dirichlet'):
             obound.append('dst2')
-        elif b in ('dst1', 'antimirror', BoundType.dst1):
+        elif b in ('dst1', 'antimirror'):
             obound.append('dst1')
         else:
             raise ValueError(f'Unknown boundary condition {b}')
-    if as_enum:
-        obound = list(map(lambda b: getattr(BoundType, b), obound))
     if issubclass(intype, (list, tuple)):
         obound = intype(obound)
     else:
@@ -95,19 +92,19 @@ def to_scipy(bound):
     obound = []
     for b in bound:
         b = b.lower()
-        if b in ('replicate', 'border', 'nearest', BoundType.replicate):
+        if b in ('replicate', 'border', 'nearest'):
             obound.append('border')
-        elif b in ('zero', 'zeros', 'constant', BoundType.zero):
+        elif b in ('zero', 'zeros', 'constant'):
             obound.append('constant')
-        elif b in ('dct2', 'reflect', 'reflection', 'neumann', BoundType.dct2):
+        elif b in ('dct2', 'reflect', 'reflection', 'neumann'):
             obound.append('reflect')
-        elif b in ('dct1', 'mirror', BoundType.dct1):
+        elif b in ('dct1', 'mirror'):
             obound.append('mirror')
-        elif b in ('dft', 'wrap', 'circular', BoundType.dft):
+        elif b in ('dft', 'wrap', 'circular'):
             obound.append('wrap')
-        elif b in ('dst2', 'antireflect', 'dirichlet', BoundType.dst2):
+        elif b in ('dst2', 'antireflect', 'dirichlet'):
             raise ValueError(f'Boundary condition {b} not available in SciPy.')
-        elif b in ('dst1', 'antimirror', BoundType.dst1):
+        elif b in ('dst1', 'antimirror'):
             raise ValueError(f'Boundary condition {b} not available in SciPy.')
         else:
             raise ValueError(f'Unknown boundary condition {b}')
@@ -140,19 +137,19 @@ def to_torch(bound):
     obound = []
     for b in bound:
         b = b.lower()
-        if b in ('replicate', 'border', 'nearest', BoundType.replicate):
+        if b in ('replicate', 'border', 'nearest'):
             obound.append(('nearest', None))
-        elif b in ('zero', 'zeros', 'constant', BoundType.zero):
+        elif b in ('zero', 'zeros', 'constant'):
             obound.append(('zero', None))
-        elif b in ('dct2', 'reflect', 'reflection', 'neumann', BoundType.dct2):
+        elif b in ('dct2', 'reflect', 'reflection', 'neumann'):
             obound.append(('reflection', True))
-        elif b in ('dct1', 'mirror', BoundType.dct1):
+        elif b in ('dct1', 'mirror'):
             obound.append(('reflection', False))
-        elif b in ('dft', 'wrap', 'circular', BoundType.dft):
+        elif b in ('dft', 'wrap', 'circular'):
             raise ValueError(f'Boundary condition {b} not available in Torch.')
-        elif b in ('dst2', 'antireflect', 'dirichlet', BoundType.dst2):
+        elif b in ('dst2', 'antireflect', 'dirichlet'):
             raise ValueError(f'Boundary condition {b} not available in Torch.')
-        elif b in ('dst1', 'antimirror', BoundType.dst1):
+        elif b in ('dst1', 'antimirror'):
             raise ValueError(f'Boundary condition {b} not available in Torch.')
         else:
             raise ValueError(f'Unknown boundary condition {b}')

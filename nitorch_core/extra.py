@@ -2,19 +2,13 @@
 
 import torch
 from torch import Tensor
-import math as pymath
-import itertools
 import numbers
-import os
-import random
 from typing import Optional, List
-import contextlib
-
 
 from nitorch_core.constants import inf
 from nitorch_core import py, dtypes, bounds, jit
-from nitorch_core.optionals import numpy as np
 from nitorch_core.version import torch_version
+from nitorch_core.padding import ensure_shape
 
 
 def as_tensor(input, dtype=None, device=None):
@@ -39,10 +33,6 @@ def as_tensor(input, dtype=None, device=None):
         Output tensor.
 
     """
-    # TODO: if torch >= 1.6, use` torch.as_tensor`
-    #   I have to clean uses of `utils.as_tensor` first because the
-    #   order of arguments is a bit different (I think it is device then
-    #   dtype in torch)
     def _stack(x, dtype, device):
         if torch.is_tensor(x):
             return x.to(device if device is not None else x.device,
@@ -56,7 +46,10 @@ def as_tensor(input, dtype=None, device=None):
             else:
                 return torch.as_tensor(x, dtype=dtype, device=device)
 
-    return _stack(input, dtype, device)
+    try:
+        torch.as_tensor(input, dtype=dtype, device=device)
+    except ValueError:
+        return _stack(input, dtype, device)
 
 
 def make_vector(input, n=None, crop=True, *args, 
@@ -167,7 +160,7 @@ def invert_permutation(perm):
     Examples
     --------
     >>> import torch
-    >>> from nitorch.core.utils import invert_permutation
+    >>> from nitorch_core.extra import invert_permutation
     >>> perm = [0, 2, 3, 1]
     >>> a = torch.rand((len(perm),))
     >>> permuted_a = a[perm]
@@ -193,24 +186,24 @@ def shiftdim(x, n=None):
 
     Parameters
     ----------
-        x : torch.Tensor
-            Input tensor.
-        n : int, default=None
-            Shift.
-            * When N is positive, `shiftdim` shifts the dimensions to
-              the left and wraps the N leading dimensions to the end.
-            * When N is negative, `shiftdim` shifts the dimensions to
-              the right and pads with singletons.
-            * When N is None, `shiftdim` removes all leading singleton
-              dimensions. The number of removed dimensions is returned
-              as well.
+    x : tensor
+        Input tensor.
+    n : int, default=None
+        Shift.
+        * When N is positive, `shiftdim` shifts the dimensions to
+          the left and wraps the N leading dimensions to the end.
+        * When N is negative, `shiftdim` shifts the dimensions to
+          the right and pads with singletons.
+        * When N is None, `shiftdim` removes all leading singleton
+          dimensions. The number of removed dimensions is returned
+          as well.
 
     Returns
     -------
-        x : torch.Tensor
-            Output tensor.
-        n : int, if n is None
-            Number of removed dimensions
+    x : tensor
+        Output tensor.
+    n : int, if n is None
+        Number of removed dimensions
 
     """
     if n is None:
@@ -274,7 +267,8 @@ def movedim(input, source, destination):
         Tensor with moved dimensions.
 
     """
-    input = torch.as_tensor(input)
+    if isinstance(source, int) and isinstance(destination, int):
+        return fast_movedim(input, source, destination)
     perm = py.move_to_permutation(input.dim(), source, destination)
     return input.permute(*perm)
 

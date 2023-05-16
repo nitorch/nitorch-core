@@ -1,7 +1,7 @@
 """Finite-differences operators (gradient, divergence, ...)."""
 import torch
-from nitorch_core import linalg
-from nitorch_core.tensors import (
+from nitorch_fastmath import eig_sym
+from nitorch_core.extra import (
     fast_slice_tensor, fast_movedim, same_storage, make_vector, roll)
 from nitorch_core.py import make_list, ensure_list
 from nitorch_core.conv import smooth
@@ -836,7 +836,7 @@ def frangi_nodiff(x, a=0.5, b=0.5, c=500, white_ridges=False, fwhm=range(1, 8, 2
         if is_on_cpu:
             torch.symeig(h, out=(v, torch.empty([])))
         else:
-            v.copy_(linalg.eig_sym_(h))
+            v.copy_(eig_sym(h, inplace=True))
         # we must order eigenvalues by increasing *magnitude*
         _, perm = v.abs().sort()
         v.copy_(v.gather(-1, perm))
@@ -963,7 +963,7 @@ def frangi_diff(x, a=0.5, b=0.5, c=500, white_ridges=False, fwhm=range(1, 8, 2),
         if is_on_cpu:
             eig = torch.symeig(h, eigenvectors=True)[0]
         else:
-            eig = linalg.eig_sym_(h)
+            eig = eig_sym(h, inplace=True)
         _, perm = eig.abs().sort()
         eig = eig.gather(-1, perm)
         lam1, lam2, *lam3 = eig.unbind(-1)
@@ -1202,7 +1202,7 @@ def hessian_eig(x, fwhm=1, dim=None, bound='replicate', sort='abs', verbose=Fals
     if is_on_cpu:
         eig = torch.symeig(h, eigenvectors=True)[0]
     else:
-        eig = linalg.eig_sym_(h)
+        eig = eig_sym(h, inplace=True)
     if sort:
         val = eig
         if sort.lower()[0] == 'a':

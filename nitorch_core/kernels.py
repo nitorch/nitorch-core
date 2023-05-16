@@ -7,6 +7,100 @@ __all__ = ['smooth', 'make_separable']
 import torch
 
 
+def smooth(types='gauss', fwhm=1, basis=1, x=None, sep=True, dtype=None, device=None):
+    """Create a smoothing kernel.
+
+    Creates a (separable) smoothing kernel with fixed (i.e., not learned)
+    weights. These weights are obtained by analytically convolving a
+    smoothing function (e.g., Gaussian) with a basis function that encodes
+    the underlying image (e.g., trilinear).
+    Note that `smooth` is fully differentiable with respect to `fwhm`.
+    If the kernel is evaluated at all integer coordinates from its support,
+    its elements are ensured to sum to one.
+    The returned kernel is a `torch.Tensor`.
+
+    The returned kernel is intended for volumes ordered as (B, C, D, H, W).
+    However, the fwhm elements should be ordered as (W, H, D).
+    For more information about ordering conventions in nitorch, see
+    `nitorch.spatial?`.
+
+    Parameters
+    ----------
+    types : str or int or sequence[str or int]
+        Smoothing function (integrates to one).
+        - -1 or 'dirac' : Dirac function
+        -  0 or 'rect'  : Rectangular function (0th order B-spline)
+        -  1 or 'tri'   : Triangular function (1st order B-spline)
+        -  2 or 'gauss' : Gaussian
+    fwhm : int or sequence[int], default=1
+        Full-width at half-maximum of the smoothing function
+        (in voxels), in each dimension.
+    basis : int, default=1
+        Image encoding basis (B-spline order)
+    x : tuple or vector_like, optional
+        Coordinates at which to evaluate the kernel.
+        If None, evaluate at all integer coordinates from its support
+        (truncated support for 'gauss').
+    sep : bool, default=True
+        Return separable 1D kernels.
+        If False, the 1D kernels are combined to form an N-D kernel.
+    dtype : torch.dtype, optional
+    device : torch.device, optional
+
+    Returns
+    -------
+    tuple or (channel_in, channel_out, *kernel_size) tensor
+        If `sep is False` or all input parameters are scalar,
+        a single kernel is returned.
+        Else, a tuple of kernels is returned.
+
+
+    """
+    # Convert to tensors
+    fwhm = torch.as_tensor(fwhm, dtype=dtype, device=device).flatten()
+    if not fwhm.is_floating_point():
+        fwhm = fwhm.type(torch.float)
+    dtype = fwhm.dtype
+    device = fwhm.device
+    return_tuple = True
+    if not isinstance(x, tuple):
+        return_tuple = (len(fwhm.shape) > 0)
+        x = (x,)
+    x = tuple(torch.as_tensor(x1, dtype=dtype, device=device).flatten()
+              if x1 is not None else None for x1 in x)
+    if type(types) not in (list, tuple):
+        types = [types]
+    types = list(types)
+
+    # Ensure all sizes are consistant
+    nker = max(fwhm.numel(), len(x), len(types))
+    fwhm = torch.cat((fwhm, fwhm[-1].repeat(max(0, nker-fwhm.numel()))))
+    x = x + (x[-1],)*max(0, nker-len(x))
+    types += (types[-1],)*max(0, nker-len(types))
+
+    # Loop over dimensions
+    ker = tuple()
+    x = list(x)
+    for d in range(nker):
+        ker1, x[d] = _smooth_switcher[types[d]](fwhm[d], basis, x[d])
+        shape = [1, ] * nker
+        shape[d] = ker1.numel()
+        ker1 = ker1.reshape(shape)
+        ker1 = ker1[None, None, ...]  # Cout = 1, Cin = 1
+        ker += (ker1, )
+
+    # Make N-D kernel
+    if not sep:
+        ker1 = ker
+        ker = ker1[0]
+        for d in range(1, nker):
+            ker = ker * ker1[d]
+    elif not return_tuple:
+        ker = ker[0]
+
+    return ker
+
+
 def make_separable(ker, channels):
     """Transform a single-channel kernel into a multi-channel separable kernel.
 
@@ -182,98 +276,4 @@ _smooth_switcher = {
     0: _rect1d,
     1: _triangle1d,
     2: _gauss1d,
-    }
-
-
-def smooth(types='gauss', fwhm=1, basis=1, x=None, sep=True, dtype=None, device=None):
-    """Create a smoothing kernel.
-
-    Creates a (separable) smoothing kernel with fixed (i.e., not learned)
-    weights. These weights are obtained by analytically convolving a
-    smoothing function (e.g., Gaussian) with a basis function that encodes
-    the underlying image (e.g., trilinear).
-    Note that `smooth` is fully differentiable with respect to `fwhm`.
-    If the kernel is evaluated at all integer coordinates from its support,
-    its elements are ensured to sum to one.
-    The returned kernel is a `torch.Tensor`.
-
-    The returned kernel is intended for volumes ordered as (B, C, D, H, W).
-    However, the fwhm elements should be ordered as (W, H, D).
-    For more information about ordering conventions in nitorch, see
-    `nitorch.spatial?`.
-
-    Parameters
-    ----------
-    types : str or int or sequence[str or int]
-        Smoothing function (integrates to one).
-        - -1 or 'dirac' : Dirac function
-        -  0 or 'rect'  : Rectangular function (0th order B-spline)
-        -  1 or 'tri'   : Triangular function (1st order B-spline)
-        -  2 or 'gauss' : Gaussian
-    fwhm : int or sequence[int], default=1
-        Full-width at half-maximum of the smoothing function 
-        (in voxels), in each dimension.
-    basis : int, default=1
-        Image encoding basis (B-spline order)
-    x : tuple or vector_like, optional
-        Coordinates at which to evaluate the kernel. 
-        If None, evaluate at all integer coordinates from its support 
-        (truncated support for 'gauss').
-    sep : bool, default=True
-        Return separable 1D kernels. 
-        If False, the 1D kernels are combined to form an N-D kernel.
-    dtype : torch.dtype, optional
-    device : torch.device, optional
-
-    Returns
-    -------
-    tuple or (channel_in, channel_out, *kernel_size) tensor
-        If `sep is False` or all input parameters are scalar,
-        a single kernel is returned. 
-        Else, a tuple of kernels is returned.
-
-
-    """
-    # Convert to tensors
-    fwhm = torch.as_tensor(fwhm, dtype=dtype, device=device).flatten()
-    if not fwhm.is_floating_point():
-        fwhm = fwhm.type(torch.float)
-    dtype = fwhm.dtype
-    device = fwhm.device
-    return_tuple = True
-    if not isinstance(x, tuple):
-        return_tuple = (len(fwhm.shape) > 0)
-        x = (x,)
-    x = tuple(torch.as_tensor(x1, dtype=dtype, device=device).flatten()
-              if x1 is not None else None for x1 in x)
-    if type(types) not in (list, tuple):
-        types = [types]
-    types = list(types)
-
-    # Ensure all sizes are consistant
-    nker = max(fwhm.numel(), len(x), len(types))
-    fwhm = torch.cat((fwhm, fwhm[-1].repeat(max(0, nker-fwhm.numel()))))
-    x = x + (x[-1],)*max(0, nker-len(x))
-    types += (types[-1],)*max(0, nker-len(types))
-
-    # Loop over dimensions
-    ker = tuple()
-    x = list(x)
-    for d in range(nker):
-        ker1, x[d] = _smooth_switcher[types[d]](fwhm[d], basis, x[d])
-        shape = [1, ] * nker
-        shape[d] = ker1.numel()
-        ker1 = ker1.reshape(shape)
-        ker1 = ker1[None, None, ...]  # Cout = 1, Cin = 1
-        ker += (ker1, )
-
-    # Make N-D kernel
-    if not sep:
-        ker1 = ker
-        ker = ker1[0]
-        for d in range(1, nker):
-            ker = ker * ker1[d]
-    elif not return_tuple:
-        ker = ker[0]
-
-    return ker
+}

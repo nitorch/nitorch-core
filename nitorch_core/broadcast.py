@@ -1,5 +1,5 @@
 import torch
-from nitorch_core.tensors import unsqueeze
+from nitorch_core.extra import unsqueeze
 
 
 def broadcast_backward(input, shape):

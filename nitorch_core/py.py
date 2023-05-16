@@ -1,4 +1,13 @@
 """Python utilities."""
+__all__ = [
+    'file_mod', 'file_replace', 'fileparts',
+    'make_sequence', 'make_list', 'make_set', 'make_tuple', 'ensure_list',
+    'rep_sequence', 'rep_list',
+    'getargs', 'pop',
+    'prod', 'cumprod', 'cumsum', 'majority', 'flatten',
+    'expand_list', 'move_to_permutation', 'move_elem',
+    'argmax', 'argmin',
+]
 import os
 import functools
 from types import GeneratorType as generator
