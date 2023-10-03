@@ -19,10 +19,11 @@ def eps(dtype='float32'):
         f16_types += ['float16', torch.float16]
     if hasattr(torch, 'complex32'):
         f16_types += ['complex32', torch.complex32]
-    f32_types = ['float32', torch.float32, 'complex64', torch.complex64] \
-                + ([np.float32, np.complex64] if np else [])
-    f64_types = ['float64', torch.float64, 'complex128', torch.complex128] \
-                + ([np.float64, np.complex128] if np else [])
+    f32_types = ['float32', torch.float32, 'complex64', torch.complex64]
+    f64_types = ['float64', torch.float64, 'complex128', torch.complex128]
+    if np:
+        f32_types += [np.float32, np.complex64]
+        f64_types += [np.float64, np.complex128]
 
     if dtype in f16_types:
         return 2 ** -10

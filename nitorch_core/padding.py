@@ -160,7 +160,11 @@ def _pad_bound(inp, padpre, padpost, bound):
         grid[d], mult[d] = bound(grid[d], n)
     grid = list(meshgrid_ij(*grid))
     if any(map(torch.is_tensor, mult)):
-        mult = meshgrid_ij(*mult)
+        for d in range(len(mult)):
+            if not torch.is_tensor(mult[d]):
+                continue
+            for _ in range(d+1, len(mult)):
+                mult[d].unsqueeze_(-1)
     mult = prod(mult)
     grid = sub2ind_list(grid, inp.shape)
 

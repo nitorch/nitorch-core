@@ -3,9 +3,9 @@ import torch
 from torch.nn import functional as F
 from nitorch_core import kernels
 from nitorch_core.py import make_list, ensure_list
-from nitorch_core.padding import pad
 from nitorch_core.extra import to_max_backend, make_vector, movedim, ind2sub
 from nitorch_fastmath import reduce
+from torchrelay.extra import pad
 
 
 def _same_padding(in_size, kernel_size, stride, ceil):
@@ -349,7 +349,7 @@ def pool(dim, tensor, kernel_size=3, stride=None, dilation=1, padding=0,
         # pad the input a bit more
         padding = _pad_for_ceil(spatial_in, kernel_size, padding, stride, dilation)
 
-    use_torch = (reduction in ('mean', 'avg', 'max') and 
+    use_torch = (reduction in ('mean', 'avg', 'max') and
                  dim in (1, 2, 3) and
                  dilation == [1] * dim)
 

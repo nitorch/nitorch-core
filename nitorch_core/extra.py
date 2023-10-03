@@ -8,7 +8,7 @@ from typing import Optional, List
 from nitorch_core.constants import inf
 from nitorch_core import py, dtypes, bounds, jit
 from nitorch_core.version import torch_version
-from nitorch_core.padding import ensure_shape
+from torchrelay.extra import ensure_shape
 
 
 def as_tensor(input, dtype=None, device=None):
@@ -47,12 +47,12 @@ def as_tensor(input, dtype=None, device=None):
                 return torch.as_tensor(x, dtype=dtype, device=device)
 
     try:
-        torch.as_tensor(input, dtype=dtype, device=device)
+        return torch.as_tensor(input, dtype=dtype, device=device)
     except ValueError:
         return _stack(input, dtype, device)
 
 
-def make_vector(input, n=None, crop=True, *args, 
+def make_vector(input, n=None, crop=True, *args,
                 dtype=None, device=None, **kwargs):
     """Ensure that the input is a (tensor) vector and pad/crop if necessary.
 
@@ -94,7 +94,7 @@ def make_vector(input, n=None, crop=True, *args,
         return ensure_shape(input, n, mode='constant', value=default)
     else:
         return ensure_shape(input, n, mode='replicate')
-        
+
 
 def unsqueeze(input, dim=0, ndim=1):
     """Adds singleton dimensions to a tensor.
